@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Send, Sparkles, AlertCircle, X, Minimize2, Maximize2, Bot, FileText, Download, ExternalLink, Eye } from 'lucide-react';
+import { MessageSquare, Send, Sparkles, AlertCircle, X, Minimize2, Maximize2, Bot, FileText, Download, ExternalLink, Eye, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { chatWithAI } from '../services/geminiService';
 import { GroundServiceRate, TripDetails, QuotationItem, Message } from '../types';
@@ -28,6 +28,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [viewingDraft, setViewingDraft] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -64,7 +65,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
     } catch (err: any) {
       console.error("Chat Error:", err);
-      setMessages(prev => [...prev, { role: 'assistant', content: "I'm sorry, I encountered an error. Could you please try again?" }]);
+      let errorMessage = "I'm sorry, I encountered an error. Could you please try again?";
+      
+      const errorString = err?.toString() || "";
+      if (err?.status === 429 || errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED') || errorString.includes('quota')) {
+        errorMessage = "You have exceeded your Gemini API quota. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits.";
+      }
+      
+      setMessages(prev => [...prev, { role: 'assistant', content: errorMessage }]);
     } finally {
       setLoading(false);
     }
@@ -290,6 +298,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-200 rounded-xl transition-all"
                 >
                   Close
+                </button>
+                <button 
+                  onClick={() => {
+                    if (viewingDraft) {
+                      navigator.clipboard.writeText(viewingDraft);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }
+                  }}
+                  className="px-6 py-3 bg-slate-800 text-white font-bold hover:bg-slate-900 rounded-xl transition-all flex items-center gap-2"
+                >
+                  {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  {copied ? 'Copied!' : 'Copy Text'}
                 </button>
                 <button 
                   onClick={() => {

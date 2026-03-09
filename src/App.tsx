@@ -17,7 +17,7 @@ import { collection, addDoc, query, where, getDocs, deleteDoc, doc, writeBatch, 
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [rates, setRates] = useState<GroundServiceRate[]>([]);
-  const [currentView, setCurrentView] = useState<'upload' | 'chat' | 'preview' | 'history' | 'settings'>('upload');
+  const [currentView, setCurrentView] = useState<'admin' | 'chat' | 'preview' | 'history' | 'settings'>('chat');
   const [tripDetails, setTripDetails] = useState<TripDetails | null>(null);
   const [quotationItems, setQuotationItems] = useState<QuotationItem[]>([]);
   const [draftText, setDraftText] = useState<string>('');
@@ -65,7 +65,7 @@ export default function App() {
       });
       if (loadedRates.length > 0) {
         setRates(loadedRates);
-        if (currentView === 'upload') setCurrentView('chat');
+        if (currentView === 'admin') setCurrentView('chat');
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, path);
@@ -99,7 +99,7 @@ export default function App() {
     try {
       await signOut(auth);
       setRates([]);
-      setCurrentView('upload');
+      setCurrentView('chat');
     } catch (error) {
       console.error("Logout failed:", error);
     }
@@ -214,19 +214,18 @@ export default function App() {
 
         <nav className="space-y-2">
           <button 
-            onClick={() => setCurrentView('upload')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentView === 'upload' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            Dashboard
-          </button>
-          <button 
-            onClick={() => rates.length > 0 && setCurrentView('chat')}
-            disabled={rates.length === 0}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentView === 'chat' ? 'bg-purple-50 text-purple-700 font-bold' : 'text-slate-500 hover:bg-slate-50 disabled:opacity-50'}`}
+            onClick={() => setCurrentView('chat')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentView === 'chat' ? 'bg-purple-50 text-purple-700 font-bold' : 'text-slate-500 hover:bg-slate-50'}`}
           >
             <Sparkles className="w-5 h-5" />
-            AI Trip Planner
+            Frontend (Chat)
+          </button>
+          <button 
+            onClick={() => setCurrentView('admin')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentView === 'admin' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            Backend (Rates)
           </button>
           <button 
             onClick={() => setCurrentView('history')}
@@ -290,16 +289,16 @@ export default function App() {
               AI Powered
             </div>
             <h2 className="text-4xl font-black text-slate-900 tracking-tight">
-              {currentView === 'upload' && "Welcome Back"}
               {currentView === 'chat' && "AI Trip Planner"}
+              {currentView === 'admin' && "Backend Rate Management"}
               {currentView === 'preview' && "Your Quotation is Ready"}
               {currentView === 'history' && "Your History"}
               {currentView === 'settings' && "Agency Settings"}
             </h2>
             <p className="text-slate-500 mt-1">
               {!user && "Sign in to save your rates and quotations to the cloud."}
-              {user && currentView === 'upload' && "Upload your rates to get started with AI-generated quotations."}
               {currentView === 'chat' && "Tell me what you need, and I'll build the quotation for you."}
+              {user && currentView === 'admin' && "Upload your rates to get started with AI-generated quotations."}
               {currentView === 'preview' && "Review the details and export your quotation as a PDF."}
               {currentView === 'history' && "View and manage your previous quotations."}
               {currentView === 'settings' && "Configure your agency details for PDF exports."}
@@ -307,11 +306,11 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
-            <div className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentView === 'upload' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>1. Rates</div>
+            <div className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentView === 'admin' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Backend</div>
             <ChevronRight className="w-4 h-4 text-slate-300" />
-            <div className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentView === 'chat' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>2. AI Chat</div>
+            <div className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentView === 'chat' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Frontend</div>
             <ChevronRight className="w-4 h-4 text-slate-300" />
-            <div className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentView === 'preview' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>3. Review</div>
+            <div className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentView === 'preview' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Review</div>
           </div>
         </header>
 
@@ -329,9 +328,9 @@ export default function App() {
           )}
 
           <AnimatePresence mode="wait">
-            {currentView === 'upload' && (
+            {currentView === 'admin' && (
               <motion.div
-                key="upload"
+                key="admin"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -349,7 +348,7 @@ export default function App() {
                       onClick={() => setCurrentView('chat')}
                       className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all active:scale-95"
                     >
-                      Continue to AI Planner
+                      Go to Frontend
                     </button>
                   </div>
                 )}
@@ -364,25 +363,43 @@ export default function App() {
                 exit={{ opacity: 0, y: -20 }}
                 className="max-w-4xl mx-auto"
               >
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[600px]">
-                  <div className="p-6 bg-purple-600 text-white flex items-center gap-4">
-                    <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-                      <Sparkles className="w-6 h-6" />
+                {rates.length === 0 ? (
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden flex flex-col items-center justify-center p-12 text-center h-[600px]">
+                    <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6">
+                      <LayoutDashboard className="w-10 h-10" />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold">AI Trip Planner</h3>
-                      <p className="text-purple-100 text-sm">Describe your trip and I'll handle the costing</p>
-                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 mb-2">Welcome to the Frontend</h3>
+                    <p className="text-slate-500 mb-8 max-w-md">
+                      To start generating AI quotations, you need to configure your service rates in the Backend first.
+                    </p>
+                    <button 
+                      onClick={() => setCurrentView('admin')}
+                      className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
+                    >
+                      Go to Backend (Upload Rates)
+                    </button>
                   </div>
-                  <ChatInterface 
-                    rates={rates} 
-                    onQuotationParsed={handleGenerateQuotation} 
-                    isFullPage={true}
-                    agencySettings={agencySettings}
-                    messages={messages}
-                    setMessages={setMessages}
-                  />
-                </div>
+                ) : (
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[600px]">
+                    <div className="p-6 bg-purple-600 text-white flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                        <Sparkles className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold">AI Trip Planner</h3>
+                        <p className="text-purple-100 text-sm">Describe your trip and I'll handle the costing</p>
+                      </div>
+                    </div>
+                    <ChatInterface 
+                      rates={rates} 
+                      onQuotationParsed={handleGenerateQuotation} 
+                      isFullPage={true}
+                      agencySettings={agencySettings}
+                      messages={messages}
+                      setMessages={setMessages}
+                    />
+                  </div>
+                )}
               </motion.div>
             )}
 

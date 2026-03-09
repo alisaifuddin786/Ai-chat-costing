@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: quotations
+    // Document ID: auto-generated
+    // Fields:
+    //   - clientName: string (required)
+    //   - tripName: string (required)
+    //   - paxCount: int (required)
+    //   - startDate: string (ISO date)
+    //   - endDate: string (ISO date)
+    //   - items: list (objects with segment, description, quantity, unitPrice, totalPrice)
+    //   - totalAmount: number (required)
+    //   - currency: string
+    //   - draftText: string
+    //   - uid: string (required, owner)
+    //   - createdAt: int (required)
+    //
+    // Collection: serviceRates
+    // Document ID: auto-generated
+    // Fields:
+    //   - segment: string (required)
+    //   - minPax: int (required)
+    //   - maxPax: int (required)
+    //   - rate: number (required)
+    //   - currency: string
+    //   - uid: string (required, owner)
+    //
+    // Collection: settings
+    // Document ID: userId
+    // Fields:
+    //   - agencyName: string (required)
+    //   - email: string (required)
+    //   - phone: string
+    //   - website: string
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidQuotationItem(item) {
+      return item.segment is string && item.segment.size() > 0 && item.segment.size() < 100 &&
+             item.description is string && item.description.size() > 0 && item.description.size() < 500 &&
+             item.quantity is int && item.quantity > 0 &&
+             item.unitPrice is number && item.unitPrice >= 0 &&
+             item.totalPrice is number && item.totalPrice >= 0;
+    }
+
+    function isValidQuotation(data) {
+      let requiredFields = ['clientName', 'tripName', 'paxCount', 'items', 'totalAmount', 'uid', 'createdAt'];
+      return data.keys().hasAll(requiredFields) &&
+             data.clientName is string && data.clientName.size() > 0 && data.clientName.size() < 100 &&
+             data.tripName is string && data.tripName.size() > 0 && data.tripName.size() < 100 &&
+             data.paxCount is int && data.paxCount > 0 &&
+             data.items is list && data.items.size() > 0 && data.items.size() < 50 &&
+             data.items.all(item, isValidQuotationItem(item)) &&
+             data.totalAmount is number && data.totalAmount >= 0 &&
+             data.uid == request.auth.uid &&
+             data.createdAt is int;
+    }
+
+    function isValidServiceRate(data) {
+      return data.segment is string && data.segment.size() > 0 && data.segment.size() < 100 &&
+             data.minPax is int && data.minPax >= 0 &&
+             data.maxPax is int && data.maxPax >= data.minPax &&
+             data.rate is number && data.rate >= 0 &&
+             data.uid == request.auth.uid;
+    }
+
+    function isValidSettings(data) {
+      return data.agencyName is string && data.agencyName.size() > 0 && data.agencyName.size() < 100 &&
+             data.email is string && data.email.size() > 0 && data.email.size() < 100;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /quotations/{quotationId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidQuotation(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidQuotation(request.resource.data) && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /serviceRates/{rateId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidServiceRate(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidServiceRate(request.resource.data) && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /settings/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidSettings(request.resource.data);
+    }
+  }
+}

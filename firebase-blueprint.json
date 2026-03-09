@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "quotationItem": {
+      "title": "Quotation Item",
+      "description": "A single line item in a travel quotation.",
+      "type": "object",
+      "properties": {
+        "segment": { "type": "string", "description": "The travel segment" },
+        "description": { "type": "string", "description": "Description of the service" },
+        "quantity": { "type": "integer", "description": "Quantity of the service" },
+        "unitPrice": { "type": "number", "description": "Price per unit" },
+        "totalPrice": { "type": "number", "description": "Total price for this item" }
+      },
+      "required": ["segment", "description", "quantity", "unitPrice", "totalPrice"]
+    },
+    "quotation": {
+      "title": "Quotation",
+      "description": "A travel quotation generated for a client.",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string", "description": "Name of the client" },
+        "tripName": { "type": "string", "description": "Name of the trip" },
+        "paxCount": { "type": "integer", "description": "Number of passengers" },
+        "startDate": { "type": "string", "format": "date", "description": "Start date of the trip" },
+        "endDate": { "type": "string", "format": "date", "description": "End date of the trip" },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "quotationItem" },
+          "description": "List of items included in the quotation"
+        },
+        "totalAmount": { "type": "number", "description": "Total quotation amount" },
+        "currency": { "type": "string", "description": "Currency code" },
+        "draftText": { "type": "string", "description": "AI generated draft text" },
+        "uid": { "type": "string", "description": "User ID of the creator" },
+        "createdAt": { "type": "integer", "description": "Timestamp of creation" }
+      },
+      "required": ["clientName", "tripName", "paxCount", "items", "totalAmount", "uid", "createdAt"]
+    },
+    "serviceRate": {
+      "title": "Service Rate",
+      "description": "Ground service rate for a specific segment and pax range.",
+      "type": "object",
+      "properties": {
+        "segment": { "type": "string" },
+        "minPax": { "type": "integer" },
+        "maxPax": { "type": "integer" },
+        "rate": { "type": "number" },
+        "currency": { "type": "string" },
+        "uid": { "type": "string", "description": "User ID of the owner" }
+      },
+      "required": ["segment", "minPax", "maxPax", "rate", "uid"]
+    },
+    "agencySettings": {
+      "title": "Agency Settings",
+      "description": "Business details for the travel agency.",
+      "type": "object",
+      "properties": {
+        "agencyName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "website": { "type": "string", "format": "uri" },
+        "logoUrl": { "type": "string", "format": "uri" }
+      },
+      "required": ["agencyName", "email"]
+    }
+  },
+  "firestore": {
+    "quotations": {
+      "schema": "quotation",
+      "description": "Collection of generated quotations"
+    },
+    "serviceRates": {
+      "schema": "serviceRate",
+      "description": "Collection of uploaded service rates"
+    },
+    "settings": {
+      "schema": "agencySettings",
+      "description": "User-specific agency settings"
+    }
+  }
+}

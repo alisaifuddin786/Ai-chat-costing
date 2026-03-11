@@ -14,6 +14,19 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { handleFirestoreError, OperationType } from './utils/errorHandlers';
 import { collection, addDoc, query, where, getDocs, deleteDoc, doc, writeBatch, serverTimestamp, getDocFromServer, getDoc } from 'firebase/firestore';
 
+const FIRESTORE_BATCH_LIMIT = 450;
+
+const chunkArray = <T,>(items: T[], chunkSize: number): T[][] => {
+  if (chunkSize <= 0) return [items];
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+};
+
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [rates, setRates] = useState<GroundServiceRate[]>([]);
@@ -119,19 +132,25 @@ export default function App() {
       // Clear old rates for this user
       const q = query(collection(db, path), where('uid', '==', user.uid));
       const querySnapshot = await getDocs(q);
-      const batch = writeBatch(db);
-      querySnapshot.forEach((document) => {
-        batch.delete(doc(db, path, document.id));
-      });
-      await batch.commit();
+      const existingDocs = querySnapshot.docs;
+
+      for (const docChunk of chunkArray(existingDocs, FIRESTORE_BATCH_LIMIT)) {
+        const deleteBatch = writeBatch(db);
+        docChunk.forEach((document) => {
+          deleteBatch.delete(document.ref);
+        });
+        await deleteBatch.commit();
+      }
 
       // Save new rates
-      const saveBatch = writeBatch(db);
-      newRates.forEach((rate) => {
-        const newDocRef = doc(collection(db, path));
-        saveBatch.set(newDocRef, { ...rate, uid: user.uid });
-      });
-      await saveBatch.commit();
+      for (const ratesChunk of chunkArray(newRates, FIRESTORE_BATCH_LIMIT)) {
+        const saveBatch = writeBatch(db);
+        ratesChunk.forEach((rate) => {
+          const newDocRef = doc(collection(db, path));
+          saveBatch.set(newDocRef, { ...rate, uid: user.uid });
+        });
+        await saveBatch.commit();
+      }
       
       setRates(newRates);
       setCurrentView('chat');
@@ -465,5 +484,4 @@ export default function App() {
     </ErrorBoundary>
   );
 }
-
 

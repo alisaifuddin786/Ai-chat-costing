@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { TripDetails, QuotationItem, GroundServiceRate } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY || "" });
 
 export const chatWithAI = async (
   messages: { role: 'user' | 'assistant'; content: string }[],

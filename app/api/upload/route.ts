@@ -1,21 +1,30 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function cleanNumber(val) {
-  if (typeof val === 'number') return val;
-  if (typeof val === 'string') {
-    return Number(val.replace(/[$,\s]/g, ''));
+type ExcelRow = Record<string, unknown>;
+
+function cleanNumber(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    return Number(value.replace(/[$,\s]/g, ''));
   }
   return Number.NaN;
 }
 
-function extractRates(rows) {
-  const parsedRates = [];
+function extractRates(rows: ExcelRow[]) {
+  const parsedRates: Array<{
+    segment: string;
+    paxRange: string;
+    minPax: number;
+    maxPax: number;
+    rate: number;
+    currency: string;
+  }> = [];
 
   rows.forEach((row) => {
     const rowKeys = Object.keys(row);
@@ -86,11 +95,13 @@ function extractRates(rows) {
   return parsedRates;
 }
 
-export async function POST(request) {
+export async function POST(request: Request) {
   try {
     const contentType = request.headers.get('content-type') || '';
+    console.log('[upload] Request received', { contentType });
 
     if (!contentType.includes('multipart/form-data')) {
+      console.warn('[upload] Invalid content type', { contentType });
       return NextResponse.json(
         { error: 'Content-Type must be multipart/form-data.' },
         { status: 400 },
@@ -101,17 +112,25 @@ export async function POST(request) {
     const uploadedFile = formData.get('file');
 
     if (!(uploadedFile instanceof File)) {
+      console.warn('[upload] File field missing in form-data payload');
       return NextResponse.json(
         { error: 'No Excel file uploaded. Attach a file field in the form-data payload.' },
         { status: 400 },
       );
     }
 
+    console.log('[upload] File metadata', {
+      name: uploadedFile.name,
+      type: uploadedFile.type,
+      size: uploadedFile.size,
+    });
+
     if (uploadedFile.size === 0) {
       return NextResponse.json({ error: 'Uploaded file is empty.' }, { status: 400 });
     }
 
-    if (uploadedFile.size > MAX_FILE_SIZE) {
+    if (uploadedFile.size > MAX_FILE_SIZE_BYTES) {
+      console.warn('[upload] File too large', { size: uploadedFile.size, maxSize: MAX_FILE_SIZE_BYTES });
       return NextResponse.json(
         { error: 'File is too large. Maximum upload size is 5MB.' },
         { status: 413 },
@@ -120,6 +139,7 @@ export async function POST(request) {
 
     const fileName = uploadedFile.name || '';
     const mimeType = uploadedFile.type || '';
+
     const allowedMimes = new Set([
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -128,13 +148,17 @@ export async function POST(request) {
     ]);
 
     if (!allowedMimes.has(mimeType) && !/\.(xls|xlsx|csv)$/i.test(fileName)) {
+      console.warn('[upload] Invalid file type', { fileName, mimeType });
       return NextResponse.json(
         { error: 'Invalid file type. Please upload .xls, .xlsx, or .csv files.' },
         { status: 400 },
       );
     }
 
+    // Read file in memory for Vercel serverless compatibility.
     const fileBuffer = Buffer.from(await uploadedFile.arrayBuffer());
+    console.log('[upload] Buffer ready', { bytes: fileBuffer.byteLength });
+
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
 
     if (!workbook.SheetNames.length) {
@@ -144,15 +168,20 @@ export async function POST(request) {
       );
     }
 
-    const data = workbook.SheetNames.map((sheetName) => ({
+    const parsedSheets = workbook.SheetNames.map((sheetName) => ({
       sheetName,
-      rows: XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      rows: XLSX.utils.sheet_to_json<ExcelRow>(workbook.Sheets[sheetName], {
         defval: null,
         raw: false,
       }),
     }));
 
-    const rates = extractRates(data[0]?.rows ?? []);
+    console.log('[upload] Workbook parsed', {
+      sheets: workbook.SheetNames.length,
+      firstSheetRows: parsedSheets[0]?.rows.length ?? 0,
+    });
+
+    const rates = extractRates(parsedSheets[0]?.rows ?? []);
 
     if (!rates.length) {
       return NextResponse.json(
@@ -161,14 +190,16 @@ export async function POST(request) {
       );
     }
 
+    console.log('[upload] Rates extracted', { count: rates.length });
+
     return NextResponse.json({
       success: true,
       fileName,
       rates,
-      data,
+      data: parsedSheets,
     });
   } catch (error) {
-    console.error('Excel upload parsing failed:', error);
+    console.error('[upload] Excel upload parsing failed', error);
 
     return NextResponse.json(
       {

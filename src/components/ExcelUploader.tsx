@@ -9,129 +9,34 @@ interface ExcelUploaderProps {
 }
 
 export const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onRatesLoaded }) => {
+  const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const parseRatesLocally = async (file: File): Promise<GroundServiceRate[]> => {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array' });
-    const sheetName = workbook.SheetNames[0];
-
-    if (!sheetName) {
-      throw new Error('The Excel file does not contain any sheets.');
-    }
-
-    const worksheet = workbook.Sheets[sheetName];
-    const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
-
-    if (jsonData.length === 0) {
-      throw new Error('The Excel file seems to be empty or has no data in the first sheet.');
-    }
-
-    const cleanNumber = (val: unknown): number => {
-      if (typeof val === 'number') return val;
-      if (typeof val === 'string') {
-        const cleaned = val.replace(/[$,\s]/g, '');
-        return Number(cleaned);
-      }
-      return Number.NaN;
-    };
-
-    const parsedRates: GroundServiceRate[] = [];
-
-    jsonData.forEach((row) => {
-      const rowKeys = Object.keys(row);
-      const segmentPriorityKeys = ['TOURS', 'SEGMENT', 'SERVICE', 'DESCRIPTION', 'SR. NO.'];
-
-      let segmentName = '';
-      for (const priorityKey of segmentPriorityKeys) {
-        const foundKey = rowKeys.find((key) => key.trim().toUpperCase() === priorityKey);
-        if (foundKey && row[foundKey]) {
-          segmentName = String(row[foundKey]).trim();
-          break;
-        }
-      }
-
-      if (!segmentName) return;
-
-      rowKeys.forEach((key) => {
-        const trimmedKey = key.trim();
-        const paxMatch = trimmedKey.match(/^(\d+)\s*PAX$/i) ?? trimmedKey.match(/^PAX\s*(\d+)$/i);
-
-        if (!paxMatch) return;
-
-        const paxCount = Number.parseInt(paxMatch[1], 10);
-        const rateValue = cleanNumber(row[key]);
-
-        if (!Number.isNaN(rateValue) && rateValue > 0) {
-          parsedRates.push({
-            segment: segmentName,
-            paxRange: `${paxCount}`,
-            minPax: paxCount,
-            maxPax: paxCount,
-            rate: rateValue,
-            currency: String(row.Currency ?? row.currency ?? row.CURRENCY ?? 'USD'),
-          });
-        }
-      });
-
-      const rateKey = rowKeys.find((key) => key.trim().toUpperCase() === 'RATE');
-      const rate = rateKey ? cleanNumber(row[rateKey]) : Number.NaN;
-
-      if (Number.isNaN(rate) || rate <= 0) return;
-
-      const minPaxKey = rowKeys.find((key) => {
-        const normalized = key.trim().toUpperCase();
-        return normalized === 'MINPAX' || normalized === 'MIN PAX';
-      });
-
-      const maxPaxKey = rowKeys.find((key) => {
-        const normalized = key.trim().toUpperCase();
-        return normalized === 'MAXPAX' || normalized === 'MAX PAX';
-      });
-
-      const paxKey = rowKeys.find((key) => key.trim().toUpperCase() === 'PAX');
-
-      let minPax = minPaxKey ? cleanNumber(row[minPaxKey]) : Number.NaN;
-      let maxPax = maxPaxKey ? cleanNumber(row[maxPaxKey]) : Number.NaN;
-      const exactPax = paxKey ? cleanNumber(row[paxKey]) : Number.NaN;
-
-      if (!Number.isNaN(exactPax) && Number.isNaN(minPax)) {
-        minPax = exactPax;
-        maxPax = exactPax;
-      }
-
-      if (!Number.isNaN(minPax) && !Number.isNaN(maxPax)) {
-        parsedRates.push({
-          segment: segmentName,
-          paxRange: minPax === maxPax ? `${minPax}` : `${minPax}-${maxPax}`,
-          minPax,
-          maxPax,
-          rate,
-          currency: String(row.Currency ?? row.currency ?? row.CURRENCY ?? 'USD'),
-        });
-      }
-    });
-
-    if (parsedRates.length === 0) {
-      throw new Error("No valid rates found. Please ensure your columns are named '1 PAX', '2 PAX', etc., or 'Rate'.");
-    }
-
-    return parsedRates;
-  };
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError('File is too large. Maximum upload size is 5MB.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     setLoading(true);
     setError(null);
     setSuccess(false);
 
     try {
+      console.log('[frontend-upload] Upload started', {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+      });
+
       const formData = new FormData();
       formData.append('file', file);
 
@@ -142,6 +47,11 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onRatesLoaded }) =
 
       const text = await response.text();
       const data = text ? JSON.parse(text) : {};
+
+      console.log('[frontend-upload] Upload API response', {
+        status: response.status,
+        ok: response.ok,
+      });
 
       if (!response.ok) {
         throw new Error(data.error || `Upload endpoint returned status ${response.status}`);
@@ -156,7 +66,7 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onRatesLoaded }) =
       await onRatesLoaded(rates);
       setSuccess(true);
     } catch (err: any) {
-      console.error("Excel Upload Error:", err);
+      console.error('[frontend-upload] Excel upload failed', err);
       setError(err.message || "Failed to parse Excel file.");
     } finally {
       setLoading(false);

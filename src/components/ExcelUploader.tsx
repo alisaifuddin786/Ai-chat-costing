@@ -135,25 +135,22 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onRatesLoaded }) =
       const formData = new FormData();
       formData.append('file', file);
 
-      let rates: GroundServiceRate[] = [];
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-      try {
-        const response = await fetch('/api/upload-rates', {
-          method: 'POST',
-          body: formData,
-        });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
 
-        const text = await response.text();
-        const data = text ? JSON.parse(text) : {};
+      if (!response.ok) {
+        throw new Error(data.error || `Upload endpoint returned status ${response.status}`);
+      }
 
-        if (!response.ok) {
-          throw new Error(data.error || `Upload endpoint returned status ${response.status}`);
-        }
+      const rates: GroundServiceRate[] = data.rates;
 
-        rates = data.rates;
-      } catch (apiErr) {
-        console.warn('Falling back to local Excel parsing.', apiErr);
-        rates = await parseRatesLocally(file);
+      if (!Array.isArray(rates) || rates.length === 0) {
+        throw new Error('No rates were returned from the upload API.');
       }
 
       await onRatesLoaded(rates);

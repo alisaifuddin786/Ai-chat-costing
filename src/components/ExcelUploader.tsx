@@ -40,22 +40,23 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onRatesLoaded }) =
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/upload', {
+      const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
 
-      const text = await response.text();
-      const data = text ? JSON.parse(text) : {};
-
       console.log('[frontend-upload] Upload API response', {
-        status: response.status,
-        ok: response.ok,
+        status: res.status,
+        ok: res.ok,
       });
 
-      if (!response.ok) {
-        throw new Error(data.error || `Upload endpoint returned status ${response.status}`);
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('[frontend-upload] Upload API error text', errorText);
+        throw new Error(`Upload endpoint returned status ${res.status}`);
       }
+
+      const data = await res.json();
 
       const rates: GroundServiceRate[] = data.rates;
 

@@ -52,7 +52,10 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onRatesLoaded }) =
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error('[frontend-upload] Upload API error text', errorText);
+        console.error(
+          `[frontend-upload] Upload failed with status ${res.status} ${res.statusText}`,
+          errorText
+        );
         throw new Error(`Upload endpoint returned status ${res.status}`);
       }
 

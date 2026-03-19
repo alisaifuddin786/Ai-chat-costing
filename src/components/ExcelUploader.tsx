@@ -40,7 +40,8 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onRatesLoaded }) =
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('/api/upload', {
+      const UPLOAD_API_URL = "/api/upload";
+      const res = await fetch(UPLOAD_API_URL, {
         method: 'POST',
         body: formData,
       });
